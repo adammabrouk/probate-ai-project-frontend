@@ -18,7 +18,18 @@ export async function analyzeFile(file: File, maxRecords = 200): Promise<Analyze
 
 // For now we ignore the real backend and always return the mock.
 // Later: switch to real POST /api/analyze with FormData.
-export async function analyzeFileMock(_file: File, _maxRecords = 200): Promise<PrelimResponse> {
+export async function analyzeFileMock(_maxRecords = 200): Promise<PrelimResponse> {
   await new Promise(r => setTimeout(r, 400)); // tiny delay for UX
   return mockPrelimResponse;
+}
+
+export async function uploadFile(file: File): Promise<void> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const url = `${API_BASE}/api/upload`;
+  const res = await fetch(url, { method: "POST", body: fd });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Ingest failed (${res.status}): ${txt}`);
+  }
 }
