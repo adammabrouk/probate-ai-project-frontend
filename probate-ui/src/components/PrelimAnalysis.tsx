@@ -109,10 +109,7 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
   return (
     <div className="space-y-6">
       {/* header */}
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Probate Preliminary Analysis</h1>
-        <p className="text-sm text-gray-500">Guided drill-downs • stacked area focus • buy-box overlays</p>
-      </div>
+      
 
       <KPIBar items={data.kpis} />
 
