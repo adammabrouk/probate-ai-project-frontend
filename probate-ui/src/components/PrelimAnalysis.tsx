@@ -30,73 +30,28 @@ const Card: React.FC<React.PropsWithChildren<{ title: string; subtitle?: string 
   </div>
 );
 
-const KPIBar = ({ items }: { items: PrelimResponse["kpis"] }) => (
-  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    {items.map((k) => (
-      <div key={k.label} className="rounded-2xl border border-gray-200 shadow-sm p-4 bg-white">
-        <div className="text-xs text-gray-500">{k.label}</div>
-        <div className="text-3xl font-bold mt-1">{k.value}</div>
-        {k.hint && <div className="text-[11px] text-gray-500">{k.hint}</div>}
-      </div>
-    ))}
-  </div>
-);
-
-// ---------- filter (drill-down) state ----------
-type Filters = {
-  county?: string;
-  month?: string;          // YYYY-MM
-  petitionType?: string;
-  tier?: "high" | "med" | "low";
+// ---------- props for interactive filtering ----------
+type Handlers = {
+  onCountyClick?: (county: string) => void;
+  onMonthClick?: (ym: string) => void; // YYYY-MM
+  onPetitionTypeClick?: (pt: string) => void;
+  onAbsenteeOnly?: () => void;
+  onValueBucket?: (low?: number, high?: number) => void;
 };
 
-const FilterChips = ({ f, onClear, onRemove }: {
-  f: Filters; onClear: () => void; onRemove: (key: keyof Filters) => void;
-}) => {
-  const chips: Array<[keyof Filters, string]> = [];
-  if (f.county) chips.push(["county", `County: ${f.county}`]);
-  if (f.month) chips.push(["month", `Month: ${f.month}`]);
-  if (f.petitionType) chips.push(["petitionType", `Type: ${f.petitionType}`]);
-  if (f.tier) chips.push(["tier", `Tier: ${f.tier}`]);
-  if (!chips.length) return null;
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {chips.map(([k, label]) => (
-        <span key={k} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs">
-          {label}
-          <button onClick={() => onRemove(k)} className="hover:text-indigo-900">×</button>
-        </span>
-      ))}
-      <button onClick={onClear} className="text-xs text-gray-600 underline">Clear all</button>
-    </div>
-  );
-};
-
-// ---------- helpers to filter shortlist on the client (mocked data) ----------
-function applyFilters(rows: RecordRow[], f: Filters): RecordRow[] {
-  return rows.filter(r => {
-    if (f.county && r.county !== f.county) return false;
-    if (f.month && r.petition_date?.slice(0, 7) !== f.month) return false;
-    if (f.petitionType && r.petition_type !== f.petitionType) return false;
-    if (f.tier && r.tier !== f.tier) return false;
-    return true;
-  });
-}
-
-// ---------- main component ----------
-export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
+export default function PrelimAnalysis({
+  data,
+  onCountyClick,
+  onMonthClick,
+  onPetitionTypeClick,
+  onAbsenteeOnly,
+  onValueBucket,
+}: { data: PrelimResponse } & Handlers) {
   const { charts: c, thresholds: t } = data;
   const [tab, setTab] = useState<"overview" | "counties" | "timing" | "value">("overview");
-  const [filters, setFilters] = useState<Filters>({});
-  const clearAll = () => setFilters({});
-  const removeKey = (k: keyof Filters) => setFilters({ ...filters, [k]: undefined });
 
-  // Filtered shortlist (drill-down target)
-  const shortlist = useMemo(() => applyFilters(data.shortlist, filters), [data.shortlist, filters]);
-
-  // Derived lines for stacked/threshold visuals
+  // Synthesized stacked absentee/local per month from rate * total filings
   const absenteeStackOverTime = useMemo(() => {
-    // synthesize absentee vs local trend from absenteeRateTrend and filingsByMonth
     const byMonth = new Map(c.filingsByMonth.map(d => [d.month, d.count]));
     return c.absenteeRateTrend.map(d => {
       const total = byMonth.get(d.month) ?? 0;
@@ -105,16 +60,31 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
     });
   }, [c.absenteeRateTrend, c.filingsByMonth]);
 
+  // Map value histogram bucket -> numeric range for backend filters
+  const bucketToRange = (bucket: string): [number | undefined, number | undefined] => {
+    switch (bucket) {
+      case "<100k": return [0, 100000];
+      case "100–250k": return [100000, 250000];
+      case "250–500k": return [250000, 500000];
+      case "500k–1M": return [500000, 1000000];
+      case "1M+": return [1000000, undefined];
+      default: return [undefined, undefined];
+    }
+  };
+
   // ---------- page ----------
   return (
     <div className="space-y-6">
-      {/* header */}
-      
-
-      <KPIBar items={data.kpis} />
-
-      {/* filters breadcrumb */}
-      <FilterChips f={filters} onClear={clearAll} onRemove={removeKey} />
+      {/* KPI bar */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {data.kpis.map((k) => (
+          <div key={k.label} className="rounded-2xl border border-gray-200 shadow-sm p-4 bg-white">
+            <div className="text-xs text-gray-500">{k.label}</div>
+            <div className="text-3xl font-bold mt-1">{k.value}</div>
+            {"hint" in k && (k as any).hint && <div className="text-[11px] text-gray-500">{(k as any).hint}</div>}
+          </div>
+        ))}
+      </div>
 
       {/* tabs */}
       <div className="flex gap-2">
@@ -141,7 +111,7 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart
                 data={c.filingsByMonthTiered}
-                onClick={(e: any) => e?.activeLabel && setFilters(f => ({ ...f, month: e.activeLabel }))}
+                onClick={(e: any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -156,9 +126,12 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Absentee vs Local Over Time (stacked area)" subtitle="Target absentee rate line">
+          <Card title="Absentee vs Local Over Time (stacked area)" subtitle="Click a month to filter; red line marks target rate">
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={absenteeStackOverTime}>
+              <AreaChart
+                data={absenteeStackOverTime}
+                onClick={(e: any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -166,9 +139,8 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
                 <Legend />
                 {t && (
                   <ReferenceLine
-                    y={(c.filingsByMonth[0]?.count ?? 100) * t.absenteeRateTarget}
-                    stroke={PALETTE.warn} strokeDasharray="4 4" label="Target"
-                  />
+                    y={undefined /* visual only; area is stacked */}
+                    label="" />
                 )}
                 <Area type="monotone" dataKey="local" stackId="a" stroke={PALETTE.local} fill={PALETTE.local} fillOpacity={0.45} />
                 <Area type="monotone" dataKey="absentee" stackId="a" stroke={PALETTE.absentee} fill={PALETTE.absentee} fillOpacity={0.65} />
@@ -202,11 +174,14 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
       {/* -------- COUNTIES (drill by county) -------- */}
       {tab === "counties" && (
         <div className="grid lg:grid-cols-2 gap-6">
-          <Card title="Absentee vs Local by County (stacked bar)" subtitle="Click a county to filter the shortlist">
+          <Card title="Absentee vs Local by County (stacked bar)" subtitle="Click a county to filter">
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.absenteeByCounty}
-                onClick={(e: any) => e?.activeLabel && setFilters(f => ({ ...f, county: e.activeLabel }))}
+                onClick={(e: any) => {
+                  const county = e?.activeLabel || e?.activePayload?.[0]?.payload?.county;
+                  if (county) onCountyClick?.(county);
+                }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="county" />
@@ -221,7 +196,13 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
 
           <Card title="Median Value by County (buy-box band)">
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={c.valueByCounty}>
+              <BarChart
+                data={c.valueByCounty}
+                onClick={(e: any) => {
+                  const county = e?.activeLabel || e?.activePayload?.[0]?.payload?.county;
+                  if (county) onCountyClick?.(county);
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="county" />
                 <YAxis />
@@ -243,16 +224,15 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
       {/* -------- TIMING (petition windows, delays) -------- */}
       {tab === "timing" && (
         <div className="grid lg:grid-cols-2 gap-6">
-          <Card title="Days Since Petition (buckets)" subtitle="Shaded band shows ideal 30–180 days">
+          <Card title="Days Since Petition (buckets)">
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={c.daysSincePetitionHist}>
+              <BarChart
+                data={c.daysSincePetitionHist}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="bucket" />
                 <YAxis />
                 <Tooltip />
-                {t && (
-                  <ReferenceArea x1="31–60" x2="181–365" fill={PALETTE.accent} fillOpacity={0.1} label="Ideal window" />
-                )}
                 <Bar dataKey="count" fill={PALETTE.med} />
               </BarChart>
             </ResponsiveContainer>
@@ -270,9 +250,12 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Filings by Month">
+          <Card title="Filings by Month" subtitle="Click a month to filter">
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={c.filingsByMonth}>
+              <LineChart
+                data={c.filingsByMonth}
+                onClick={(e:any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -283,11 +266,14 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Petition Types (click to filter)">
+          <Card title="Petition Types" subtitle="Click a bar to filter">
             <ResponsiveContainer width="100%" height={280}>
               <BarChart
                 data={c.petitionTypes}
-                onClick={(e: any) => e?.activeLabel && setFilters(f => ({ ...f, petitionType: e.activeLabel }))}
+                onClick={(e:any) => {
+                  const pt = e?.activeLabel || e?.activePayload?.[0]?.payload?.petition_type;
+                  if (pt) onPetitionTypeClick?.(pt);
+                }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="petition_type" />
@@ -303,9 +289,17 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
       {/* -------- VALUE & CLASS -------- */}
       {tab === "value" && (
         <div className="grid lg:grid-cols-3 gap-6">
-          <Card title="Property Value Distribution (buy-box)">
+          <Card title="Property Value Distribution (buy-box)" subtitle="Click a bucket to filter">
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={c.valueHist}>
+              <BarChart
+                data={c.valueHist}
+                onClick={(e:any) => {
+                  const bucket = e?.activeLabel || e?.activePayload?.[0]?.payload?.bucket;
+                  if (!bucket) return;
+                  const [low, high] = bucketToRange(bucket);
+                  onValueBucket?.(low, high);
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="bucket" />
                 <YAxis />
@@ -344,10 +338,20 @@ export default function PrelimAnalysis({ data }: { data: PrelimResponse }) {
         </div>
       )}
 
-      {/* -------- Shortlist (always visible) -------- */}
+      {/* -------- Quick actions -------- */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          onClick={() => onAbsenteeOnly?.()}
+        >
+          Show Absentee Only
+        </button>
+      </div>
+
+      {/* -------- Shortlist (from backend; already filtered) -------- */}
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold">Shortlist (reflects filters)</h3>
-        <Shortlist rows={shortlist} />
+        <h3 className="text-lg font-semibold">Shortlist</h3>
+        <Shortlist rows={data.shortlist} />
       </div>
     </div>
   );
@@ -377,9 +381,9 @@ function Shortlist({ rows }: { rows: RecordRow[] }) {
               <td className="px-3 py-2">{r.city}</td>
               <td className="px-3 py-2">{r.property_value_2025 ? `$${(r.property_value_2025).toLocaleString()}` : ""}</td>
               <td className="px-3 py-2">{r.petition_date}</td>
-              <td className="px-3 py-2">{r.absentee_flag ? "Yes" : "No"}</td>
+              <td className="px-3 py-2">{r.absentee_flag === undefined ? "" : (r.absentee_flag ? "Yes" : "No")}</td>
               <td className="px-3 py-2">{r.parcel_number ?? ""}</td>
-              <td className="px-3 py-2">{r.qpublic_report_url ? <a className="text-indigo-600 underline" href={r.qpublic_report_url} target="_blank">Link</a> : ""}</td>
+              <td className="px-3 py-2">{r.qpublic_report_url ? <a className="text-indigo-600 underline" href={r.qpublic_report_url} target="_blank" rel="noreferrer">Link</a> : ""}</td>
               <td className="px-3 py-2 max-w-[360px]">{r.rationale ?? ""}</td>
             </tr>
           ))}
