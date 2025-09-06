@@ -396,11 +396,14 @@ export default function PrelimAnalysis({
 }
 
 // minimalist shortlist table
-function Shortlist({ rows }: { rows: RecordRow[] }) {
+function Shortlist({ rows, loading }: { rows: RecordRow[]; loading?: boolean }) {
   return (
-    <div className="overflow-auto border rounded-2xl bg-white">
+    <div className="relative overflow-auto border rounded-2xl bg-white">
+      {loading && (
+        <div className="absolute inset-0 bg-white/60 flex items-center justify-center text-gray-600">Loading…</div>
+      )}
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 sticky top-0">
+        <thead className="bg-gray-50 sticky top-0 z-10">
           <tr>
             {["Score","Tier","County","Case","Owner","Address","City","Value","Petition Date","Absentee","Parcel","qPublic","Why"].map(h => (
               <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>

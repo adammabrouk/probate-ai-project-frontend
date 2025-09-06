@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import PrelimAnalysis from "./components/PrelimAnalysis";
 import type { PrelimResponse, RecordRow } from "./types";
 import { fetchDashboard, fetchShortlist } from "./lib/api";
@@ -31,7 +31,7 @@ export default function App() {
       return next;
     });
   };
-  
+
   // load shortlist page
   const loadShortlist = useCallback(async () => {
     setLoadingSL(true);
