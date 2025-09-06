@@ -95,6 +95,8 @@ export async function fetchDashboard(params?: Record<string, any>): Promise<Prel
     median_value: d.average_value, // naming for chart; value is avg for now
   }));
 
+  
+
   return {
     kpis: kpis.kpis, // contains your new "Absentee %" KPI
 
@@ -120,4 +122,23 @@ export async function fetchDashboard(params?: Record<string, any>): Promise<Prel
 
     shortlist: shortlist.shortlist || [],
   };
+}
+
+export type ShortlistMeta = {
+  total: number; page: number; page_size: number; total_pages: number;
+  has_next: boolean; has_prev: boolean;
+};
+
+export async function fetchShortlist(params: Record<string, any>, page = 1, pageSize = 25): Promise<{ shortlist: RecordRow[]; meta: ShortlistMeta }> {
+  const sp = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v == null) return;
+    if (Array.isArray(v)) v.forEach(x => sp.append(k, String(x)));
+    else sp.append(k, String(v));
+  });
+  sp.set("page", String(page));
+  sp.set("page_size", String(pageSize));
+  const res = await fetch(makeUrl(`/shortlist?${sp.toString()}`));
+  if (!res.ok) throw new Error(`shortlist failed (${res.status}): ${await res.text()}`);
+  return res.json();
 }

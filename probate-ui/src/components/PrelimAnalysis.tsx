@@ -33,23 +33,57 @@ const Card: React.FC<React.PropsWithChildren<{ title: string; subtitle?: string 
 // ---------- props for interactive filtering ----------
 type Handlers = {
   onCountyClick?: (county: string) => void;
-  onMonthClick?: (ym: string) => void; // YYYY-MM
+  onMonthClick?: (ym: string) => void;
   onPetitionTypeClick?: (pt: string) => void;
   onAbsenteeOnly?: () => void;
   onValueBucket?: (low?: number, high?: number) => void;
+  onShortlistPageChange?: (page: number) => void;
 };
 
 export default function PrelimAnalysis({
   data,
+  shortlist,
+  shortlistMeta,
+  shortlistLoading,
+  onShortlistPageChange,
   onCountyClick,
   onMonthClick,
   onPetitionTypeClick,
   onAbsenteeOnly,
   onValueBucket,
-}: { data: PrelimResponse } & Handlers) {
+}: {
+  data: PrelimResponse;
+  shortlist: RecordRow[];
+  shortlistMeta?: { total:number; page:number; page_size:number; total_pages:number; has_next:boolean; has_prev:boolean };
+  shortlistLoading?: boolean;
+} & Handlers) {
   const { charts: c, thresholds: t } = data;
   const [tab, setTab] = useState<"overview" | "counties" | "timing" | "value">("overview");
 
+  const Pager = () => {
+  if (!shortlistMeta) return null;
+  const { page, page_size, total_pages, total, has_prev, has_next } = shortlistMeta;
+  const start = (page - 1) * page_size + 1;
+  const end = Math.min(page * page_size, total);
+  return (
+    <div className="flex items-center justify-between py-2 text-sm">
+      <div className="text-gray-600">{total ? `Showing ${start}–${end} of ${total}` : "No results"}</div>
+      <div className="flex gap-2">
+        <button
+          className="px-3 py-1.5 rounded border disabled:opacity-50"
+          disabled={!has_prev || shortlistLoading}
+          onClick={() => onShortlistPageChange?.(page - 1)}
+        >Previous</button>
+        <span className="px-2 py-1.5">{page} / {Math.max(1, total_pages)}</span>
+        <button
+          className="px-3 py-1.5 rounded border disabled:opacity-50"
+          disabled={!has_next || shortlistLoading}
+          onClick={() => onShortlistPageChange?.(page + 1)}
+        >Next</button>
+      </div>
+    </div>
+  );
+  };
   // Synthesized stacked absentee/local per month from rate * total filings
   const absenteeStackOverTime = useMemo(() => {
     const byMonth = new Map(c.filingsByMonth.map(d => [d.month, d.count]));
@@ -350,8 +384,12 @@ export default function PrelimAnalysis({
 
       {/* -------- Shortlist (from backend; already filtered) -------- */}
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold">Shortlist</h3>
-        <Shortlist rows={data.shortlist} />
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Shortlist</h3>
+          <Pager />
+        </div>
+        <Shortlist rows={shortlist} loading={!!shortlistLoading} />
+        <Pager />
       </div>
     </div>
   );
