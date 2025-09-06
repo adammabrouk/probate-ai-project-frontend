@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import type { PrelimResponse, RecordRow } from "../types";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ReferenceArea, ReferenceLine, Brush, PieChart, Pie, Cell,
 } from "recharts";
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 
 // ---------- palette & shared styles ----------
 const PALETTE = {
@@ -51,39 +52,47 @@ export default function PrelimAnalysis({
   onPetitionTypeClick,
   onAbsenteeOnly,
   onValueBucket,
+  sort,
+  onSortChange,
+  filters,
+  ...handlers
 }: {
   data: PrelimResponse;
   shortlist: RecordRow[];
   shortlistMeta?: { total:number; page:number; page_size:number; total_pages:number; has_next:boolean; has_prev:boolean };
   shortlistLoading?: boolean;
+  sort: { column: string; direction: "asc" | "desc" }[];
+  onSortChange: (sort: { column: string; direction: "asc" | "desc" }[]) => void;
+  filters: Record<string, any>;
 } & Handlers) {
   const { charts: c, thresholds: t } = data;
   const [tab, setTab] = useState<"overview" | "counties" | "timing" | "value">("overview");
 
   const Pager = () => {
-  if (!shortlistMeta) return null;
-  const { page, page_size, total_pages, total, has_prev, has_next } = shortlistMeta;
-  const start = (page - 1) * page_size + 1;
-  const end = Math.min(page * page_size, total);
-  return (
-    <div className="flex items-center justify-between py-2 text-sm">
-      <div className="text-gray-600">{total ? `Showing ${start}–${end} of ${total}` : "No results"}</div>
-      <div className="flex gap-2">
-        <button
-          className="px-3 py-1.5 rounded border disabled:opacity-50"
-          disabled={!has_prev || shortlistLoading}
-          onClick={() => onShortlistPageChange?.(page - 1)}
-        >Previous</button>
-        <span className="px-2 py-1.5">{page} / {Math.max(1, total_pages)}</span>
-        <button
-          className="px-3 py-1.5 rounded border disabled:opacity-50"
-          disabled={!has_next || shortlistLoading}
-          onClick={() => onShortlistPageChange?.(page + 1)}
-        >Next</button>
+    if (!shortlistMeta) return null;
+    const { page, page_size, total_pages, total, has_prev, has_next } = shortlistMeta;
+    const start = (page - 1) * page_size + 1;
+    const end = Math.min(page * page_size, total);
+    return (
+      <div className="flex items-center justify-between py-2 text-sm">
+        <div className="text-gray-600">{total ? `Showing ${start}–${end} of ${total}` : "No results"}</div>
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-1.5 rounded border disabled:opacity-50"
+            disabled={!has_prev || shortlistLoading}
+            onClick={() => onShortlistPageChange?.(page - 1)}
+          >Previous</button>
+          <span className="px-2 py-1.5">{page} / {Math.max(1, total_pages)}</span>
+          <button
+            className="px-3 py-1.5 rounded border disabled:opacity-50"
+            disabled={!has_next || shortlistLoading}
+            onClick={() => onShortlistPageChange?.(page + 1)}
+          >Next</button>
+        </div>
       </div>
-    </div>
-  );
+    );
   };
+
   // Synthesized stacked absentee/local per month from rate * total filings
   const absenteeStackOverTime = useMemo(() => {
     const byMonth = new Map(c.filingsByMonth.map(d => [d.month, d.count]));
@@ -105,6 +114,40 @@ export default function PrelimAnalysis({
       default: return [undefined, undefined];
     }
   };
+
+  // Download CSV handler
+  const handleDownload = useCallback(async () => {
+    const params: any = { ...filters };
+    // Map frontend sort keys to backend keys
+    const sortKeyMap: Record<string, string> = { property_value_2025: "property_value" };
+    if (sort && sort.length) params.sort = sort.map(s => `${sortKeyMap[s.column] || s.column}:${s.direction}`).join(",");
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v == null) return;
+      if (Array.isArray(v)) v.forEach(x => sp.append(k, String(x)));
+      else sp.append(k, String(v));
+    });
+    sp.set("page", "1");
+    sp.set("page_size", "1000");
+    const res = await fetch(`/api/shortlist?${sp.toString()}`);
+    if (!res.ok) { alert("Failed to download shortlist"); return; }
+    const { shortlist } = await res.json();
+    const headers = [
+      "score","tier","county","case_no","owner_name","property_address","city","property_value_2025","petition_date","absentee_flag","parcel_number","qpublic_report_url","rationale"
+    ];
+    const csv = [headers.join(",")].concat(
+      shortlist.map((row: any) => headers.map(h => JSON.stringify(row[h] ?? "")).join(","))
+    ).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `shortlist.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [filters, sort]);
 
   // ---------- page ----------
   return (
@@ -384,11 +427,23 @@ export default function PrelimAnalysis({
 
       {/* -------- Shortlist (from backend; already filtered) -------- */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold">Shortlist</h3>
-          <Pager />
+          <div className="flex items-center gap-2">
+            <button
+              className="flex items-center gap-1 px-3 py-1.5 rounded border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 transition-colors shadow-sm text-sm font-medium disabled:opacity-60"
+              onClick={handleDownload}
+              disabled={shortlistLoading}
+              style={{ minWidth: 0 }}
+              title="Download shortlist as CSV"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Download CSV</span>
+            </button>
+            <Pager />
+          </div>
         </div>
-        <Shortlist rows={shortlist} loading={!!shortlistLoading} />
+        <Shortlist rows={shortlist} loading={!!shortlistLoading} sort={sort} onSortChange={onSortChange} />
         <Pager />
       </div>
     </div>
@@ -396,7 +451,53 @@ export default function PrelimAnalysis({
 }
 
 // minimalist shortlist table
-function Shortlist({ rows, loading }: { rows: RecordRow[]; loading?: boolean }) {
+function Shortlist({ rows, loading, sort, onSortChange }: { rows: RecordRow[]; loading?: boolean; sort: { column: string; direction: "asc" | "desc" }[]; onSortChange: (sort: { column: string; direction: "asc" | "desc" }[]) => void; }) {
+  // Map display header to data key
+  const columns = [
+    { label: "Score", key: "score" },
+    { label: "Tier", key: "tier" },
+    { label: "County", key: "county" },
+    { label: "Case", key: "case_no" },
+    { label: "Owner", key: "owner_name" },
+    { label: "Address", key: "property_address" },
+    { label: "City", key: "city" },
+    { label: "Value", key: "property_value_2025" },
+    { label: "Petition Date", key: "petition_date" },
+    { label: "Absentee", key: "absentee_flag" },
+    { label: "Parcel", key: "parcel_number" },
+    { label: "qPublic", key: "qpublic_report_url" },
+    { label: "Why", key: "rationale" },
+  ];
+
+  // Handle header click for multi-sort
+  function handleSort(colKey: string) {
+    const idx = sort.findIndex(s => s.column === colKey);
+    let nextSort: { column: string; direction: "asc" | "desc" }[];
+    if (idx === -1) {
+      // Add as primary sort asc
+      nextSort = [{ column: colKey, direction: "asc" }, ...sort];
+    } else {
+      // Toggle direction or remove
+      const curr = sort[idx];
+      if (curr.direction === "asc") {
+        nextSort = [...sort];
+        nextSort[idx] = { ...curr, direction: "desc" as const };
+      } else {
+        // Remove from sort
+        nextSort = sort.filter((_, i) => i !== idx);
+      }
+    }
+    onSortChange(nextSort);
+  }
+
+  // Helper to get arrow and sort order
+  function sortIndicator(colKey: string) {
+    const idx = sort.findIndex(s => s.column === colKey);
+    if (idx === -1) return null;
+    const arrow = sort[idx].direction === "asc" ? "▲" : "▼";
+    return <span className="ml-1 text-xs">{arrow}{sort.length > 1 ? <sup>{idx+1}</sup> : null}</span>;
+  }
+
   return (
     <div className="relative overflow-auto border rounded-2xl bg-white">
       {loading && (
@@ -405,8 +506,12 @@ function Shortlist({ rows, loading }: { rows: RecordRow[]; loading?: boolean }) 
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 sticky top-0 z-10">
           <tr>
-            {["Score","Tier","County","Case","Owner","Address","City","Value","Petition Date","Absentee","Parcel","qPublic","Why"].map(h => (
-              <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
+            {columns.map(col => (
+              <th key={col.key}
+                  className="px-3 py-2 text-left font-semibold cursor-pointer select-none hover:bg-indigo-50"
+                  onClick={() => handleSort(col.key)}>
+                {col.label} {sortIndicator(col.key)}
+              </th>
             ))}
           </tr>
         </thead>

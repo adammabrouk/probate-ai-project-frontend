@@ -17,6 +17,8 @@ export default function App() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
+  const [sort, setSort] = useState<{ column: string; direction: "asc" | "desc" }[]>([]);
+
   // load dashboard
   const loadDash = useCallback(async () => {
     setLoadingDash(true);
@@ -36,17 +38,22 @@ export default function App() {
   const loadShortlist = useCallback(async () => {
     setLoadingSL(true);
     try {
-      const { shortlist, meta } = await fetchShortlist(filters as any, page, pageSize);
+      // Map frontend sort keys to backend keys
+      const sortKeyMap: Record<string, string> = { property_value_2025: "property_value" };
+      const sortParam = sort
+        .map(s => `${sortKeyMap[s.column] || s.column}:${s.direction}`)
+        .join(",");
+      const { shortlist, meta } = await fetchShortlist({ ...filters, sort: sortParam }, page, pageSize);
       setShortlist(shortlist);
       setSlMeta(meta);
     } finally { setLoadingSL(false); }
-  }, [filters, page]);
+  }, [filters, page, sort]);
 
   useEffect(() => { loadDash(); }, [loadDash]);
   useEffect(() => { loadShortlist(); }, [loadShortlist]);
 
-  // Whenever filters change, reset to page 1
-  useEffect(() => { setPage(1); }, [filters]);
+  // Whenever filters or sort change, reset to page 1
+  useEffect(() => { setPage(1); }, [filters, sort]);
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -72,6 +79,9 @@ export default function App() {
           shortlistMeta={slMeta || undefined}
           shortlistLoading={loadingSL}
           onShortlistPageChange={setPage}
+          sort={sort}
+          onSortChange={setSort}
+          filters={filters}
           // interactive filters:
           onCountyClick={(county) => setFilters(prev => ({ ...prev, counties: [county] }))}
           onMonthClick={(ym) => setFilters(prev => ({ ...prev, month_from: ym, month_to: ym }))}
