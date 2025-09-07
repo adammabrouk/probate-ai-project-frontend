@@ -34,6 +34,16 @@ export default function App() {
     });
   };
 
+  // Add a filter for 'has_value'
+  const toggleHasValue = () => {
+    setFilters(prev => {
+      const next = { ...prev };
+      if (next.has_value) delete next.has_value;
+      else next.has_value = true;
+      return next;
+    });
+  };
+
   // load shortlist page
   const loadShortlist = useCallback(async () => {
     setLoadingSL(true);
@@ -91,6 +101,7 @@ export default function App() {
           onPropertyClassClick={(property_class) => setFilters(prev => ({ ...prev, property_class }))}
           onDaysSincePetitionRange={(min, max) => setFilters(prev => ({ ...prev, days_since_petition_min: min, days_since_petition_max: max }))}
           onDeathToPetitionRange={(min, max) => setFilters(prev => ({ ...prev, days_death_to_petition_min: min, days_death_to_petition_max: max }))}
+          onHasValue={toggleHasValue}
         />
       )}
     </div>

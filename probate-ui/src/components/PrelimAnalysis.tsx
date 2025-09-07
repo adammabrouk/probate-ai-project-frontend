@@ -57,6 +57,7 @@ export default function PrelimAnalysis({
   onValueBucket,
   sort,
   onSortChange,
+  onHasValue,
   filters,
   ...handlers
 }: {
@@ -66,7 +67,8 @@ export default function PrelimAnalysis({
   shortlistLoading?: boolean;
   sort: { column: string; direction: "asc" | "desc" }[];
   onSortChange: (sort: { column: string; direction: "asc" | "desc" }[]) => void;
-  filters: Record<string, any>;
+  onHasValue?: () => void;
+  filters: any;
 } & Handlers) {
   const { charts: c, thresholds: t } = data;
   const [tab, setTab] = useState<"overview" | "counties" | "timing" | "value">("overview");
@@ -486,6 +488,12 @@ export default function PrelimAnalysis({
           onClick={() => onAbsenteeOnly?.()}
         >
           Show Absentee Only
+        </button>
+        <button
+          className={`px-3 py-1.5 rounded-full ${filters?.has_value ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"}`}
+          onClick={onHasValue}
+        >
+          Show Only With Value
         </button>
       </div>
 

@@ -14,4 +14,5 @@ export type Filters = {
   days_since_petition_max?: number;
   days_death_to_petition_min?: number;
   days_death_to_petition_max?: number;
+  has_value?: boolean;
 };
