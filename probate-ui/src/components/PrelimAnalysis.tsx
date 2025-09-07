@@ -154,6 +154,39 @@ export default function PrelimAnalysis({
     URL.revokeObjectURL(url);
   }, [filters, sort]);
 
+  // Download current page CSV handler
+  const handleDownloadPage = useCallback(async () => {
+    const params: any = { ...filters };
+    const sortKeyMap: Record<string, string> = { property_value_2025: "property_value" };
+    if (sort && sort.length) params.sort = sort.map(s => `${sortKeyMap[s.column] || s.column}:${s.direction}`).join(",");
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v == null) return;
+      if (Array.isArray(v)) v.forEach(x => sp.append(k, String(x)));
+      else sp.append(k, String(v));
+    });
+    sp.set("page", String(shortlistMeta?.page || 1));
+    sp.set("page_size", String(shortlistMeta?.page_size || 25));
+    const res = await fetch(`/api/shortlist?${sp.toString()}`);
+    if (!res.ok) { alert("Failed to download shortlist"); return; }
+    const { shortlist } = await res.json();
+    const headers = [
+      "score","tier","county","case_no","owner_name","property_address","city","property_value_2025","petition_date","absentee_flag","parcel_number","qpublic_report_url","rationale"
+    ];
+    const csv = [headers.join(",")].concat(
+      shortlist.map((row: any) => headers.map(h => JSON.stringify(row[h] ?? "")).join(","))
+    ).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `shortlist_page_${shortlistMeta?.page || 1}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [filters, sort, shortlistMeta]);
+
   // Handler for property class click
   const onPropertyClassClick = (property_class: string) => {
     handlers.onPropertyClassClick?.(property_class);
@@ -507,10 +540,20 @@ export default function PrelimAnalysis({
               onClick={handleDownload}
               disabled={shortlistLoading}
               style={{ minWidth: 0 }}
-              title="Download shortlist as CSV"
+              title="Download all shortlist as CSV"
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Download CSV</span>
+              <span className="hidden sm:inline">Download All Shortlist</span>
+            </button>
+            <button
+              className="flex items-center gap-1 px-3 py-1.5 rounded border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 transition-colors shadow-sm text-sm font-medium disabled:opacity-60"
+              onClick={handleDownloadPage}
+              disabled={shortlistLoading}
+              style={{ minWidth: 0 }}
+              title="Download this page as CSV"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Download This Page</span>
             </button>
             <Pager />
           </div>
