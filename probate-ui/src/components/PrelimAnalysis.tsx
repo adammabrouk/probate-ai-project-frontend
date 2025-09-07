@@ -21,13 +21,22 @@ const PALETTE = {
   pink:     "#EC4899",
 };
 
-const Card: React.FC<React.PropsWithChildren<{ title: string; subtitle?: string }>> = ({ title, subtitle, children }) => (
-  <div className="rounded-2xl border border-gray-200 shadow-sm p-4 bg-white">
+const Card: React.FC<React.PropsWithChildren<{ title: string; subtitle?: string; loading?: boolean }>> = ({ title, subtitle, children, loading }) => (
+  <div className="rounded-2xl border border-gray-200 shadow-sm p-4 bg-white relative">
     <div className="mb-2">
       <h3 className="font-semibold">{title}</h3>
       {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
     </div>
-    {children}
+    {loading ? (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-indigo-600 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-500">Loading chart...</p>
+        </div>
+      </div>
+    ) : (
+      children
+    )}
   </div>
 );
 
@@ -49,6 +58,7 @@ export default function PrelimAnalysis({
   shortlist,
   shortlistMeta,
   shortlistLoading,
+  chartsLoading,
   onShortlistPageChange,
   onCountyClick,
   onMonthClick,
@@ -65,6 +75,7 @@ export default function PrelimAnalysis({
   shortlist: RecordRow[];
   shortlistMeta?: { total:number; page:number; page_size:number; total_pages:number; has_next:boolean; has_prev:boolean };
   shortlistLoading?: boolean;
+  chartsLoading?: boolean;
   sort: { column: string; direction: "asc" | "desc" }[];
   onSortChange: (sort: { column: string; direction: "asc" | "desc" }[]) => void;
   onHasValue?: () => void;
@@ -259,7 +270,7 @@ export default function PrelimAnalysis({
       {/* -------- OVERVIEW (hero stacked areas) -------- */}
       {tab === "overview" && (
         <div className="grid lg:grid-cols-3 gap-6">
-          <Card title="Lead Tiers Over Time (stacked area)" subtitle="Click a month to drill down">
+          <Card title="Lead Tiers Over Time (stacked area)" subtitle="Click a month to drill down" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart
                 data={c.filingsByMonthTiered}
@@ -278,7 +289,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Absentee vs Local Over Time (stacked area)" subtitle="Click a month to filter; red line marks target rate">
+          <Card title="Absentee vs Local Over Time (stacked area)" subtitle="Click a month to filter; red line marks target rate" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart
                 data={absenteeStackOverTime}
@@ -300,7 +311,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Property Class Mix (donut)">
+          <Card title="Property Class Mix (donut)" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
@@ -330,7 +341,7 @@ export default function PrelimAnalysis({
       {/* -------- COUNTIES (drill by county) -------- */}
       {tab === "counties" && (
         <div className="grid lg:grid-cols-2 gap-6">
-          <Card title="Absentee vs Local by County (stacked bar)" subtitle="Click a county to filter">
+          <Card title="Absentee vs Local by County (stacked bar)" subtitle="Click a county to filter" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.absenteeByCounty}
@@ -350,7 +361,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Median Value by County (buy-box band)">
+          <Card title="Median Value by County (buy-box band)" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.valueByCounty}
@@ -380,7 +391,7 @@ export default function PrelimAnalysis({
       {/* -------- TIMING (petition windows, delays) -------- */}
       {tab === "timing" && (
         <div className="grid lg:grid-cols-2 gap-6">
-          <Card title="Days Since Petition (buckets)">
+          <Card title="Days Since Petition (buckets)" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.daysSincePetitionHist}
@@ -398,7 +409,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Death → Petition Delay (days)">
+          <Card title="Death → Petition Delay (days)" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={c.daysDeathToPetitionHist}
                 onClick={(e: any) => {
@@ -415,7 +426,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Filings by Month" subtitle="Click a month to filter">
+          <Card title="Filings by Month" subtitle="Click a month to filter" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart
                 data={c.filingsByMonth}
@@ -431,7 +442,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Petition Types" subtitle="Click a bar to filter">
+          <Card title="Petition Types" subtitle="Click a bar to filter" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart
                 data={c.petitionTypes}
@@ -454,7 +465,7 @@ export default function PrelimAnalysis({
       {/* -------- VALUE & CLASS -------- */}
       {tab === "value" && (
         <div className="grid lg:grid-cols-3 gap-6">
-          <Card title="Property Value Distribution (buy-box)" subtitle="Click a bucket to filter">
+          <Card title="Property Value Distribution (buy-box)" subtitle="Click a bucket to filter" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
                 data={c.valueHist}
@@ -475,7 +486,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Property Class Mix">
+          <Card title="Property Class Mix" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie 
@@ -500,7 +511,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Top Parties by Holdings">
+          <Card title="Top Parties by Holdings" loading={chartsLoading}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={c.holdingsTopParties}>
                 <CartesianGrid strokeDasharray="3 3" />

@@ -55,6 +55,72 @@ type AbsRateResp = { absenteeRateTrend: { month: string; rate: number }[] };
 type AbsByCountyResp = { absenteeByCounty: { county: string; absentee: number; local: number }[] };
 type ShortlistResp = { shortlist: RecordRow[] };
 
+// Separate function to fetch only KPIs and basic dashboard data (no charts)
+export async function fetchKPIsAndThresholds(params?: Record<string, any>): Promise<{ kpis: { label: string; value: string | number }[]; thresholds: { absenteeRateTarget: number; buyboxValueMin: number; buyboxValueMax: number } }> {
+  const kpis = await getJSON<KPIsResp>("/charts/kpis", params);
+  
+  return {
+    kpis: kpis.kpis,
+    thresholds: {
+      absenteeRateTarget: 0.6,
+      buyboxValueMin: 150000,
+      buyboxValueMax: 450000,
+    },
+  };
+}
+
+// Separate function to fetch only charts data
+export async function fetchChartsData(params?: Record<string, any>): Promise<PrelimResponse['charts']> {
+  const [
+    propertyClassMix,
+    avgValRaw,
+    daysSince,
+    daysDeath,
+    petitionTypes,
+    parties,
+    valueHist,
+    filingsByMonth,
+    filingsTiered,
+    absRate,
+    absByCounty,
+  ] = await Promise.all([
+    getJSON<PropClassResp>("/charts/property-class-mix", params),
+    getJSON<CountyAvgValObj | CountyAvgValObj[]>("/charts/average-value-by-county", params),
+    getJSON<DaysSinceResp>("/charts/binned-days-since-petition", params),
+    getJSON<DaysDeathResp>("/charts/binned-days-petition-to-death", params),
+    getJSON<PetitionTypesResp>("/charts/petition-types", params),
+    getJSON<PartiesResp>("/charts/get-parties", params),
+    getJSON<ValueHistResp>("/charts/value-hist", params),
+    getJSON<FilingsByMonthResp>("/charts/filings-by-month", params),
+    // If you haven't implemented this yet, you can remove this call or keep it and guard-render in UI
+    // getJSON<FilingsTieredResp>("/charts/filings-by-month-tiered", params),
+    Promise.resolve({ filingsByMonthTiered: [] } as FilingsTieredResp),
+    getJSON<AbsRateResp>("/charts/absentee-rate-trend", params),
+    getJSON<AbsByCountyResp>("/charts/absentee-by-county", params),
+  ]);
+
+  // average-value-by-county: your backend sometimes returns `[ { averageValueByCounty: [...] } ]`
+  const avgObj = Array.isArray(avgValRaw) ? avgValRaw[0] : avgValRaw;
+  const valueByCounty = (avgObj?.averageValueByCounty ?? []).map(d => ({
+    county: d.county,
+    median_value: d.average_value, // naming for chart; value is avg for now
+  }));
+
+  return {
+    absenteeByCounty: absByCounty.absenteeByCounty,
+    daysSincePetitionHist: daysSince.daysSincePetitionHist.map(d => ({ bucket: d.bin, count: d.count })),
+    daysDeathToPetitionHist: daysDeath.daysDeathToPetitionHist.map(d => ({ bucket: d.bin, count: d.count })),
+    valueByCounty,
+    valueHist: valueHist.valueHist,
+    filingsByMonth: filingsByMonth.filingsByMonth,
+    filingsByMonthTiered: filingsTiered.filingsByMonthTiered,
+    absenteeRateTrend: absRate.absenteeRateTrend,
+    petitionTypes: petitionTypes.petitionTypes,
+    propertyClassMix: propertyClassMix.propertyClassMix,
+    holdingsTopParties: parties.parties.map(p => ({ party: p.party, holdings: p.count })),
+  };
+}
+
 export async function fetchDashboard(params?: Record<string, any>): Promise<PrelimResponse> {
   const [
     kpis,
