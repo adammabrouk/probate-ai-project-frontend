@@ -2,7 +2,20 @@
 import { useEffect, useState, useCallback } from "react";
 import PrelimAnalysis from "./components/PrelimAnalysis";
 import type { PrelimResponse, RecordRow } from "./types";
-import { fetchKPIsAndThresholds, fetchChartsData, fetchShortlist } from "./lib/api";
+import { 
+  fetchKPIsAndThresholds, 
+  fetchShortlist,
+  fetchPropertyClassMix,
+  fetchAverageValueByCounty,
+  fetchDaysSincePetition,
+  fetchDaysDeathToPetition,
+  fetchPetitionTypes,
+  fetchParties,
+  fetchValueHist,
+  fetchFilingsByMonth,
+  fetchAbsenteeRateTrend,
+  fetchAbsenteeByCounty
+} from "./lib/api";
 import type { Filters } from "./lib/filters";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 
@@ -11,9 +24,9 @@ export default function App() {
   const [kpisData, setKpisData] = useState<{ kpis: { label: string; value: string | number }[]; thresholds: { absenteeRateTarget: number; buyboxValueMin: number; buyboxValueMax: number } } | null>(null);
   const [loadingKpis, setLoadingKpis] = useState(false);
   
-  // Charts data (load separately)
-  const [chartsData, setChartsData] = useState<PrelimResponse['charts'] | null>(null);
-  const [loadingCharts, setLoadingCharts] = useState(false);
+  // Individual chart data states
+  const [chartData, setChartData] = useState<Partial<PrelimResponse['charts']>>({});
+  const [chartLoading, setChartLoading] = useState<Record<string, boolean>>({});
   
   // Filters state
   const [filters, setFilters] = useState<Filters>({});
@@ -39,17 +52,59 @@ export default function App() {
     }
   }, [filters]);
 
-  // Load charts data (separate from KPIs for better UX)
-  const loadCharts = useCallback(async () => {
-    setLoadingCharts(true);
-    try { 
-      setChartsData(await fetchChartsData(filters)); 
+  // Individual chart loaders
+  const loadChart = useCallback(async (chartName: string, fetchFn: Function, transform?: Function) => {
+    setChartLoading(prev => ({ ...prev, [chartName]: true }));
+    try {
+      const data = await fetchFn(filters);
+      console.log(`Chart ${chartName} data:`, data); // Debug log
+      const transformedData = transform ? transform(data) : data;
+      console.log(`Chart ${chartName} transformed:`, transformedData); // Debug log
+      setChartData(prev => ({ 
+        ...prev, 
+        [chartName]: transformedData 
+      }));
     } catch (error) {
-      console.error('Failed to load charts:', error);
-    } finally { 
-      setLoadingCharts(false); 
+      console.error(`Failed to load ${chartName}:`, error);
+    } finally {
+      setChartLoading(prev => ({ ...prev, [chartName]: false }));
     }
   }, [filters]);
+
+  const loadAllCharts = useCallback(() => {
+    // Load all charts independently
+    loadChart('propertyClassMix', fetchPropertyClassMix, (data: any) => data.propertyClassMix);
+    
+    loadChart('valueByCounty', fetchAverageValueByCounty, (data: any) => {
+      const avgObj = Array.isArray(data) ? data[0] : data;
+      return (avgObj?.averageValueByCounty ?? []).map((d: any) => ({
+        county: d.county,
+        median_value: d.average_value,
+      }));
+    });
+    
+    loadChart('daysSincePetitionHist', fetchDaysSincePetition, (data: any) => 
+      data.daysSincePetitionHist.map((d: any) => ({ bucket: d.bin, count: d.count }))
+    );
+    
+    loadChart('daysDeathToPetitionHist', fetchDaysDeathToPetition, (data: any) =>
+      data.daysDeathToPetitionHist.map((d: any) => ({ bucket: d.bin, count: d.count }))
+    );
+    
+    loadChart('petitionTypes', fetchPetitionTypes, (data: any) => data.petitionTypes);
+    
+    loadChart('holdingsTopParties', fetchParties, (data: any) => 
+      data.parties.map((p: any) => ({ party: p.party, holdings: p.count }))
+    );
+    
+    loadChart('valueHist', fetchValueHist, (data: any) => data.valueHist);
+    loadChart('filingsByMonth', fetchFilingsByMonth, (data: any) => data.filingsByMonth);
+    loadChart('absenteeRateTrend', fetchAbsenteeRateTrend, (data: any) => data.absenteeRateTrend);
+    loadChart('absenteeByCounty', fetchAbsenteeByCounty, (data: any) => data.absenteeByCounty);
+    
+    // Add mock data for filingsByMonthTiered since it's not implemented
+    setChartData(prev => ({ ...prev, filingsByMonthTiered: [] }));
+  }, [loadChart]);
 
   // Load shortlist page (separate and paginated)
   const loadShortlist = useCallback(async () => {
@@ -90,29 +145,40 @@ export default function App() {
 
   // Load data on mount and when filters change
   useEffect(() => { loadKpis(); }, [loadKpis]);
-  useEffect(() => { loadCharts(); }, [loadCharts]);
+  useEffect(() => { loadAllCharts(); }, [loadAllCharts]);
   useEffect(() => { loadShortlist(); }, [loadShortlist]);
 
   // Whenever filters or sort change, reset to page 1
   useEffect(() => { setPage(1); }, [filters, sort]);
 
   // Combine data for PrelimAnalysis component
-  const data: PrelimResponse | null = kpisData && chartsData ? {
+  const data: PrelimResponse | null = kpisData ? {
     kpis: kpisData.kpis,
-    charts: chartsData,
+    charts: chartData as PrelimResponse['charts'],
     thresholds: kpisData.thresholds,
     shortlist: [] // shortlist is handled separately
   } : null;
+
+  // Debug log the combined data
+  console.log('Combined data for PrelimAnalysis:', data);
+  console.log('Chart data state:', chartData);
+  console.log('Chart loading state:', chartLoading);
+
+  const anyChartsLoading = Object.values(chartLoading).some(loading => loading);
+  const loadingCount = Object.values(chartLoading).filter(loading => loading).length;
+  const totalCharts = Object.keys(chartLoading).length;
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header with loading indicator */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Probate Analysis Dashboard</h1>
-        {(loadingKpis || loadingCharts || loadingSL) && (
+        {(loadingKpis || anyChartsLoading || loadingSL) && (
           <div className="flex items-center text-sm text-gray-600">
             <LoadingSpinner size="sm" className="mr-2" />
-            Loading...
+            {loadingKpis ? "Loading KPIs..." : 
+             anyChartsLoading ? `Loading charts (${totalCharts - loadingCount}/${totalCharts} ready)` :
+             loadingSL ? "Loading shortlist..." : "Loading..."}
           </div>
         )}
       </div>
@@ -137,7 +203,7 @@ export default function App() {
           shortlist={shortlist}
           shortlistMeta={slMeta || undefined}
           shortlistLoading={loadingSL}
-          chartsLoading={loadingCharts}
+          chartLoading={chartLoading}
           onShortlistPageChange={setPage}
           sort={sort}
           onSortChange={setSort}

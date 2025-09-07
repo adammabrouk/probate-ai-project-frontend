@@ -58,7 +58,7 @@ export default function PrelimAnalysis({
   shortlist,
   shortlistMeta,
   shortlistLoading,
-  chartsLoading,
+  chartLoading,
   onShortlistPageChange,
   onCountyClick,
   onMonthClick,
@@ -75,14 +75,20 @@ export default function PrelimAnalysis({
   shortlist: RecordRow[];
   shortlistMeta?: { total:number; page:number; page_size:number; total_pages:number; has_next:boolean; has_prev:boolean };
   shortlistLoading?: boolean;
-  chartsLoading?: boolean;
+  chartLoading?: Record<string, boolean>;
   sort: { column: string; direction: "asc" | "desc" }[];
   onSortChange: (sort: { column: string; direction: "asc" | "desc" }[]) => void;
   onHasValue?: () => void;
   filters: any;
 } & Handlers) {
-  const { charts: c, thresholds: t } = data;
+  const { charts, thresholds: t } = data;
   const [tab, setTab] = useState<"overview" | "counties" | "timing" | "value">("overview");
+
+  // Safely access charts data with defaults
+  const c = charts || {};
+  
+  // Debug log to see what charts data we have
+  console.log('Charts data in PrelimAnalysis:', c);
 
   const Pager = () => {
     if (!shortlistMeta) return null;
@@ -111,6 +117,11 @@ export default function PrelimAnalysis({
 
   // Synthesized stacked absentee/local per month from rate * total filings
   const absenteeStackOverTime = useMemo(() => {
+    // Safety check: ensure we have the required data
+    if (!c.filingsByMonth || !c.absenteeRateTrend) {
+      return [];
+    }
+    
     const byMonth = new Map(c.filingsByMonth.map(d => [d.month, d.count]));
     return c.absenteeRateTrend.map(d => {
       const total = byMonth.get(d.month) ?? 0;
@@ -270,70 +281,88 @@ export default function PrelimAnalysis({
       {/* -------- OVERVIEW (hero stacked areas) -------- */}
       {tab === "overview" && (
         <div className="grid lg:grid-cols-3 gap-6">
-          <Card title="Lead Tiers Over Time (stacked area)" subtitle="Click a month to drill down" loading={chartsLoading}>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart
-                data={c.filingsByMonthTiered}
-                onClick={(e: any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Area type="monotone" dataKey="low" stackId="1" stroke={PALETTE.low} fill={PALETTE.low} fillOpacity={0.35} />
-                <Area type="monotone" dataKey="med" stackId="1" stroke={PALETTE.med} fill={PALETTE.med} fillOpacity={0.5} />
-                <Area type="monotone" dataKey="high" stackId="1" stroke={PALETTE.high} fill={PALETTE.high} fillOpacity={0.65} />
-                <Brush height={20} travellerWidth={10} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Card>
-
-          <Card title="Absentee vs Local Over Time (stacked area)" subtitle="Click a month to filter; red line marks target rate" loading={chartsLoading}>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart
-                data={absenteeStackOverTime}
-                onClick={(e: any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                {t && (
-                  <ReferenceLine
-                    y={undefined /* visual only; area is stacked */}
-                    label="" />
-                )}
-                <Area type="monotone" dataKey="local" stackId="a" stroke={PALETTE.local} fill={PALETTE.local} fillOpacity={0.45} />
-                <Area type="monotone" dataKey="absentee" stackId="a" stroke={PALETTE.absentee} fill={PALETTE.absentee} fillOpacity={0.65} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Card>
-
-          <Card title="Property Class Mix (donut)" loading={chartsLoading}>
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={c.propertyClassMix}
-                  dataKey="count"
-                  nameKey="property_class"
-                  innerRadius={60}
-                  outerRadius={100}
-                  label
-                  onClick={(_, idx) => {
-                    const pc = c.propertyClassMix[idx]?.property_class;
-                    if (pc) onPropertyClassClick(pc);
-                  }}
+          <Card title="Lead Tiers Over Time (stacked area)" subtitle="Click a month to drill down" loading={chartLoading?.filingsByMonthTiered}>
+            {c.filingsByMonthTiered && c.filingsByMonthTiered.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart
+                  data={c.filingsByMonthTiered}
+                  onClick={(e: any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
                 >
-                  {c.propertyClassMix.map((_, i) => {
-                    const palette = [PALETTE.high, PALETTE.med, PALETTE.absentee, PALETTE.purple, PALETTE.pink];
-                    return <Cell key={i} fill={palette[i % palette.length]} />;
-                  })}
-                </Pie>
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="low" stackId="1" stroke={PALETTE.low} fill={PALETTE.low} fillOpacity={0.35} />
+                  <Area type="monotone" dataKey="med" stackId="1" stroke={PALETTE.med} fill={PALETTE.med} fillOpacity={0.5} />
+                  <Area type="monotone" dataKey="high" stackId="1" stroke={PALETTE.high} fill={PALETTE.high} fillOpacity={0.65} />
+                  <Brush height={20} travellerWidth={10} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                No data available
+              </div>
+            )}
+          </Card>
+
+          <Card title="Absentee vs Local Over Time (stacked area)" subtitle="Click a month to filter; red line marks target rate" loading={chartLoading?.absenteeRateTrend}>
+            {absenteeStackOverTime.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart
+                  data={absenteeStackOverTime}
+                  onClick={(e: any) => e?.activeLabel && onMonthClick?.(e.activeLabel)}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  {t && (
+                    <ReferenceLine
+                      y={undefined /* visual only; area is stacked */}
+                      label="" />
+                  )}
+                  <Area type="monotone" dataKey="local" stackId="a" stroke={PALETTE.local} fill={PALETTE.local} fillOpacity={0.45} />
+                  <Area type="monotone" dataKey="absentee" stackId="a" stroke={PALETTE.absentee} fill={PALETTE.absentee} fillOpacity={0.65} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                No data available
+              </div>
+            )}
+          </Card>
+
+          <Card title="Property Class Mix (donut)" loading={chartLoading?.propertyClassMix}>
+            {c.propertyClassMix && c.propertyClassMix.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={c.propertyClassMix}
+                    dataKey="count"
+                    nameKey="property_class"
+                    innerRadius={60}
+                    outerRadius={100}
+                    label
+                    onClick={(_, idx) => {
+                      const pc = c.propertyClassMix?.[idx]?.property_class;
+                      if (pc) onPropertyClassClick?.(pc);
+                    }}
+                  >
+                    {c.propertyClassMix.map((_, i) => {
+                      const palette = [PALETTE.high, PALETTE.med, PALETTE.absentee, PALETTE.purple, PALETTE.pink];
+                      return <Cell key={i} fill={palette[i % palette.length]} />;
+                    })}
+                  </Pie>
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                No data available
+              </div>
+            )}
           </Card>
         </div>
       )}
@@ -341,7 +370,7 @@ export default function PrelimAnalysis({
       {/* -------- COUNTIES (drill by county) -------- */}
       {tab === "counties" && (
         <div className="grid lg:grid-cols-2 gap-6">
-          <Card title="Absentee vs Local by County (stacked bar)" subtitle="Click a county to filter" loading={chartsLoading}>
+          <Card title="Absentee vs Local by County (stacked bar)" subtitle="Click a county to filter" loading={chartLoading?.absenteeByCounty}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.absenteeByCounty}
@@ -361,7 +390,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Median Value by County (buy-box band)" loading={chartsLoading}>
+          <Card title="Median Value by County (buy-box band)" loading={chartLoading?.valueByCounty}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.valueByCounty}
@@ -391,7 +420,7 @@ export default function PrelimAnalysis({
       {/* -------- TIMING (petition windows, delays) -------- */}
       {tab === "timing" && (
         <div className="grid lg:grid-cols-2 gap-6">
-          <Card title="Days Since Petition (buckets)" loading={chartsLoading}>
+          <Card title="Days Since Petition (buckets)" loading={chartLoading?.daysSincePetitionHist}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.daysSincePetitionHist}
@@ -409,7 +438,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Death → Petition Delay (days)" loading={chartsLoading}>
+          <Card title="Death → Petition Delay (days)" loading={chartLoading?.daysDeathToPetitionHist}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={c.daysDeathToPetitionHist}
                 onClick={(e: any) => {
@@ -426,7 +455,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Filings by Month" subtitle="Click a month to filter" loading={chartsLoading}>
+          <Card title="Filings by Month" subtitle="Click a month to filter" loading={chartLoading?.filingsByMonth}>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart
                 data={c.filingsByMonth}
@@ -442,7 +471,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Petition Types" subtitle="Click a bar to filter" loading={chartsLoading}>
+          <Card title="Petition Types" subtitle="Click a bar to filter" loading={chartLoading?.petitionTypes}>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart
                 data={c.petitionTypes}
@@ -465,7 +494,7 @@ export default function PrelimAnalysis({
       {/* -------- VALUE & CLASS -------- */}
       {tab === "value" && (
         <div className="grid lg:grid-cols-3 gap-6">
-          <Card title="Property Value Distribution (buy-box)" subtitle="Click a bucket to filter" loading={chartsLoading}>
+          <Card title="Property Value Distribution (buy-box)" subtitle="Click a bucket to filter" loading={chartLoading?.valueHist}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
                 data={c.valueHist}
@@ -486,7 +515,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Property Class Mix" loading={chartsLoading}>
+          <Card title="Property Class Mix" loading={chartLoading?.propertyClassMix}>
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie 
@@ -511,7 +540,7 @@ export default function PrelimAnalysis({
             </ResponsiveContainer>
           </Card>
 
-          <Card title="Top Parties by Holdings" loading={chartsLoading}>
+          <Card title="Top Parties by Holdings" loading={chartLoading?.holdingsTopParties}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={c.holdingsTopParties}>
                 <CartesianGrid strokeDasharray="3 3" />

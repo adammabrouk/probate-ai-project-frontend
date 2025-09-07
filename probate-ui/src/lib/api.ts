@@ -55,6 +55,47 @@ type AbsRateResp = { absenteeRateTrend: { month: string; rate: number }[] };
 type AbsByCountyResp = { absenteeByCounty: { county: string; absentee: number; local: number }[] };
 type ShortlistResp = { shortlist: RecordRow[] };
 
+// Individual chart API functions for independent loading
+export async function fetchPropertyClassMix(params?: Record<string, any>) {
+  return getJSON<PropClassResp>("/charts/property-class-mix", params);
+}
+
+export async function fetchAverageValueByCounty(params?: Record<string, any>) {
+  return getJSON<CountyAvgValObj | CountyAvgValObj[]>("/charts/average-value-by-county", params);
+}
+
+export async function fetchDaysSincePetition(params?: Record<string, any>) {
+  return getJSON<DaysSinceResp>("/charts/binned-days-since-petition", params);
+}
+
+export async function fetchDaysDeathToPetition(params?: Record<string, any>) {
+  return getJSON<DaysDeathResp>("/charts/binned-days-petition-to-death", params);
+}
+
+export async function fetchPetitionTypes(params?: Record<string, any>) {
+  return getJSON<PetitionTypesResp>("/charts/petition-types", params);
+}
+
+export async function fetchParties(params?: Record<string, any>) {
+  return getJSON<PartiesResp>("/charts/get-parties", params);
+}
+
+export async function fetchValueHist(params?: Record<string, any>) {
+  return getJSON<ValueHistResp>("/charts/value-hist", params);
+}
+
+export async function fetchFilingsByMonth(params?: Record<string, any>) {
+  return getJSON<FilingsByMonthResp>("/charts/filings-by-month", params);
+}
+
+export async function fetchAbsenteeRateTrend(params?: Record<string, any>) {
+  return getJSON<AbsRateResp>("/charts/absentee-rate-trend", params);
+}
+
+export async function fetchAbsenteeByCounty(params?: Record<string, any>) {
+  return getJSON<AbsByCountyResp>("/charts/absentee-by-county", params);
+}
+
 // Separate function to fetch only KPIs and basic dashboard data (no charts)
 export async function fetchKPIsAndThresholds(params?: Record<string, any>): Promise<{ kpis: { label: string; value: string | number }[]; thresholds: { absenteeRateTarget: number; buyboxValueMin: number; buyboxValueMax: number } }> {
   const kpis = await getJSON<KPIsResp>("/charts/kpis", params);
