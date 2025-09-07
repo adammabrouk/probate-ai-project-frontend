@@ -88,6 +88,9 @@ export default function App() {
           onPetitionTypeClick={(pt) => setFilters(prev => ({ ...prev, petition_types: [pt] }))}
           onAbsenteeOnly={() => setFilters(prev => ({ ...prev, absentee_only: true }))}
           onValueBucket={(low, high) => setFilters(prev => ({ ...prev, min_value: low, max_value: high }))}
+          onPropertyClassClick={(property_class) => setFilters(prev => ({ ...prev, property_class }))}
+          onDaysSincePetitionRange={(min, max) => setFilters(prev => ({ ...prev, days_since_petition_min: min, days_since_petition_max: max }))}
+          onDeathToPetitionRange={(min, max) => setFilters(prev => ({ ...prev, days_death_to_petition_min: min, days_death_to_petition_max: max }))}
         />
       )}
     </div>

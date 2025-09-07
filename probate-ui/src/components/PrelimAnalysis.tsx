@@ -39,6 +39,9 @@ type Handlers = {
   onAbsenteeOnly?: () => void;
   onValueBucket?: (low?: number, high?: number) => void;
   onShortlistPageChange?: (page: number) => void;
+  onPropertyClassClick?: (property_class: string) => void;
+  onDaysSincePetitionRange?: (min?: number, max?: number) => void;
+  onDeathToPetitionRange?: (min?: number, max?: number) => void;
 };
 
 export default function PrelimAnalysis({
@@ -149,6 +152,43 @@ export default function PrelimAnalysis({
     URL.revokeObjectURL(url);
   }, [filters, sort]);
 
+  // Handler for property class click
+  const onPropertyClassClick = (property_class: string) => {
+    handlers.onPropertyClassClick?.(property_class);
+  };
+  // Handler for days since petition click
+  const onDaysSincePetitionClick = (bucket: string) => {
+    // Parse bucket label to min/max days
+    const match = bucket.match(/(\d+)[^\d]+(\d+)|>(\d+)/);
+    let min, max;
+    if (match) {
+      if (match[1] && match[2]) {
+        min = parseInt(match[1], 10);
+        max = parseInt(match[2], 10);
+      } else if (match[3]) {
+        min = parseInt(match[3], 10);
+        max = undefined;
+      }
+    }
+    handlers.onDaysSincePetitionRange?.(min, max);
+  };
+  // Handler for death-petition delay click
+  const onDeathToPetitionClick = (bucket: string) => {
+    // Parse bucket label to min/max days
+    const match = bucket.match(/(\d+)[^\d]+(\d+)|>(\d+)/);
+    let min, max;
+    if (match) {
+      if (match[1] && match[2]) {
+        min = parseInt(match[1], 10);
+        max = parseInt(match[2], 10);
+      } else if (match[3]) {
+        min = parseInt(match[3], 10);
+        max = undefined;
+      }
+    }
+    handlers.onDeathToPetitionRange?.(min, max);
+  };
+
   // ---------- page ----------
   return (
     <div className="space-y-6">
@@ -235,6 +275,10 @@ export default function PrelimAnalysis({
                   innerRadius={60}
                   outerRadius={100}
                   label
+                  onClick={(_, idx) => {
+                    const pc = c.propertyClassMix[idx]?.property_class;
+                    if (pc) onPropertyClassClick(pc);
+                  }}
                 >
                   {c.propertyClassMix.map((_, i) => {
                     const palette = [PALETTE.high, PALETTE.med, PALETTE.absentee, PALETTE.purple, PALETTE.pink];
@@ -305,6 +349,10 @@ export default function PrelimAnalysis({
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={c.daysSincePetitionHist}
+                onClick={(e: any) => {
+                  const bucket = e?.activeLabel || e?.activePayload?.[0]?.payload?.bucket;
+                  if (bucket) onDaysSincePetitionClick(bucket);
+                }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="bucket" />
@@ -317,7 +365,12 @@ export default function PrelimAnalysis({
 
           <Card title="Death → Petition Delay (days)">
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={c.daysDeathToPetitionHist}>
+              <BarChart data={c.daysDeathToPetitionHist}
+                onClick={(e: any) => {
+                  const bucket = e?.activeLabel || e?.activePayload?.[0]?.payload?.bucket;
+                  if (bucket) onDeathToPetitionClick(bucket);
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="bucket" />
                 <YAxis />
@@ -390,7 +443,18 @@ export default function PrelimAnalysis({
           <Card title="Property Class Mix">
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={c.propertyClassMix} dataKey="count" nameKey="property_class" innerRadius={55} outerRadius={95} label>
+                <Pie 
+                data={c.propertyClassMix} 
+                dataKey="count" 
+                nameKey="property_class" 
+                innerRadius={55} 
+                outerRadius={95} 
+                label
+                onClick={(_, idx) => {
+                    const pc = c.propertyClassMix[idx]?.property_class;
+                    if (pc) onPropertyClassClick(pc);
+                  }}
+                >
                   {c.propertyClassMix.map((_, i) => {
                     const palette = [PALETTE.high, PALETTE.med, PALETTE.absentee, PALETTE.purple, PALETTE.pink];
                     return <Cell key={i} fill={palette[i % palette.length]} />;
