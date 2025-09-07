@@ -1,6 +1,7 @@
 // src/App.tsx
 import { useEffect, useState, useCallback } from "react";
 import PrelimAnalysis from "./components/PrelimAnalysis";
+import Dropzone from "./components/Dropzone";
 import type { PrelimResponse, RecordRow } from "./types";
 import { 
   fetchKPIsAndThresholds, 
@@ -14,7 +15,8 @@ import {
   fetchValueHist,
   fetchFilingsByMonth,
   fetchAbsenteeRateTrend,
-  fetchAbsenteeByCounty
+  fetchAbsenteeByCounty,
+  uploadFile
 } from "./lib/api";
 import type { Filters } from "./lib/filters";
 import { LoadingSpinner } from "./components/LoadingSpinner";
@@ -39,6 +41,27 @@ export default function App() {
   const pageSize = 25;
   
   const [sort, setSort] = useState<{ column: string; direction: "asc" | "desc" }[]>([]);
+
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+
+  // Upload modal state
+  const [showUpload, setShowUpload] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      await uploadFile(file);
+      setUploadMsg("Upload successful! Data will be available after refresh.");
+      // Optionally reload data here
+    } catch (e: any) {
+      setUploadMsg("Upload failed: " + (e?.message || e));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Load KPIs (fastest loading, shows immediate feedback)
   const loadKpis = useCallback(async () => {
@@ -170,6 +193,32 @@ export default function App() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* Upload Button and Modal */}
+      <div className="flex justify-end mb-4">
+        <button
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold shadow hover:bg-indigo-700 transition-colors"
+          onClick={() => setShowUpload(true)}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12" /></svg>
+          Upload CSV/XLSX
+        </button>
+      </div>
+      {showUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl font-bold"
+              onClick={() => setShowUpload(false)}
+              aria-label="Close upload dialog"
+            >×</button>
+            <h2 className="text-xl font-semibold mb-4">Upload CSV/XLSX File</h2>
+            <Dropzone onFile={handleUpload} disabled={uploading} />
+            {uploading && <div className="text-sm text-gray-600 mt-2">Uploading...</div>}
+            {uploadMsg && <div className="text-sm mt-2" style={{ color: uploadMsg.startsWith('Upload successful') ? 'green' : 'red' }}>{uploadMsg}</div>}
+          </div>
+        </div>
+      )}
+
       {/* Header with loading indicator */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Probate Analysis Dashboard</h1>
